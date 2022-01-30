@@ -1,0 +1,124 @@
+---
+title: "HDMT"
+author: "James Dai,  Xiaoyu Wang"
+date: "`r Sys.Date()`"
+bibliography: HDMT.bib
+link-citation: TRUE
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{HDMT}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+### A Multiple Testing Procedure For High-dimensional Mediation hypotheses
+*****
+
+Mediation analysis is of rising interest in clinical trials and epidemiology. The advance of high-throughput technologies has made it possible to interrogate molecular phenotypes such as gene expression and DNA methylation in a genome-wide fashion, some of which may act as intermediaries of treatment, external exposures and life-style risk factors in the etiological pathway to diseases or traits. When testing for mediation in high-dimensional studies like ours [@Dai2020], properly controlling the type I error rate remains a challenge due to the composite null hypothesis. 
+
+Among existing methods, the joint significance (JS) test is an intersection-union test using the maximum p-value for testing the two parameters, though a naive significance rule based on the uniform null p-value distribution (JS-uniform) may yield an overly conservative type I error rate and therefore low power. This is particularly a concern for high-dimensional mediation hypotheses for genome-wide molecular intermediaries such as DNA methylation. 
+
+In this R package we develop a multiple-testing procedure that accurately controls the family-wise error rate (FWER) and the false discovery rate (FDR) for testing high-dimensional mediation composite null hypotheses. The core of our procedure is based on estimating the proportions of three types of component null hypotheses and deriving the corresponding mixture distribution (JS-mixture) of null p-values.
+
+```{r setup}
+library(HDMT)
+```
+
+### Two Examples shown in the JASA paper
+
+
+We show two examples assessing the mediation role of DNA methylation in prostate cancer studies. The first study is on assessing the mediation potential role of DNA methylation in genetic regulation of gene expression in primary prostate cancer (PCa) samples from The Cancer Genome Atlas (`snp_input`). The second study investigated the potential mediation of DNA methylation on the effect of exercise lowering the risk of metastatic Progression (`exercise_input`).
+
+The input data (both `snp_input` and `exercise_input`) have two columns.  See notation in [@Dai2020]. Column 1 contains the p-values for testing if an exposure is associated with the mediator ($\alpha\neq0$). Column 2 contains the p-value for testing if a mediator is associated with the outcome after adjusted for the exposure ($\beta \neq 0$) methylation in exercise effect on prostate cancer progression in a Seattle-based patient cohort.
+
+```{r data}
+data(snp_input)
+dim(snp_input)
+data(exercise_input)
+dim(exercise_input)
+```
+
+
+
+
+##### 1. DNA Methylation in Genetic Regulation of Gene Expression Among Prostate Cancer Risk SNPs
+
+We first read the input data matrix `"input_pvalues"` first. To save time for compiling this vignettes file, we use 10\% of p-values in the input data matrix. To reproduce the figure in the JASA paper, one need to run the code on the entire data matrix.
+
+```{r input pvalue}
+input_pvalues <- snp_input
+input_pvalues=input_pvalues[sample(1:nrow(input_pvalues),size=ceiling(nrow(input_pvalues)/10)),]
+```
+
+
+The first step of the procedure is to estimate the proportions of the three type of null hypotheses using the `nullprop` function
+```{r}
+nullprop <- null_estimation(input_pvalues)
+nullprop
+```
+We next compute the expected quantiles of the mixture null distribution of $p_{max}$ (maximum of two p-values)
+using the `adjust_quantile` function, with either the approximation method (option `exact=0`) or the exact method (option `exact=1`). This set of quantiles can be used to draw the corrected q-q plot.
+
+```{r}
+pnull1<-adjust_quantile(nullprop$alpha00,nullprop$alpha01,nullprop$alpha10,nullprop$alpha1,nullprop$alpha2,input_pvalues,exact=1)
+```
+**HDMT** provides a function `correct_qqplot` to draw the corrected quantile-quantile plot for
+$p_{max}$, based on the estimated quantile of the mixture null distribution (green dots) and compared to the standard q-q plot based on the uniform distribution (red dots).
+
+```{r,fig.height=5,fig.width=5}
+pmax <- apply(input_pvalues,1,max)
+correct_qqplot(pmax, pnull1)
+```
+
+
+We can also compute the pointwise estimated FDR for $p_{max}$ using the `fdr_est()` function, with either the approximation method or the exact method. The family-wise error rate cut-off can be computed by the `fwer_est()` function. 
+
+```{r,fig.height=5,fig.width=5}
+efdr <- fdr_est(nullprop$alpha00,nullprop$alpha01,nullprop$alpha10,nullprop$alpha1,nullprop$alpha2,input_pvalues,exact=0)
+
+plot(pmax[order(pmax)],efdr[order(pmax)],type="l",ylim=c(0,1),xlab="p-max",ylab="Estimated FDR")
+```
+
+##### 2.DNA Methylation and Association of Physical Activity With Lower Risk of Metastatic Progression
+
+For this example, we only included 10\% of p-values from the genome-wide testing as shown in the paper, due to data storage space limit. We read in the input data matrix with two columns of p-values as follows.
+
+```{r}
+input_pvalues <- exercise_input
+#To save time, we use 10% of rows
+input_pvalues=input_pvalues[sample(1:nrow(input_pvalues),size=ceiling(nrow(input_pvalues)/10)),]
+```
+The estimation procedures are identical to the previous example:
+```{r}
+nullprop <- null_estimation(input_pvalues)
+```
+We can compute the null distribution of pmax using the approximation method in Section 2.2 of the paper, and we can also compute the null distribution of $p_{max}$ using the exact method in Section 2.4.
+```{r}
+pnull<-adjust_quantile(nullprop$alpha00,nullprop$alpha01,nullprop$alpha10,nullprop$alpha1,nullprop$alpha2,input_pvalues,exact=0)
+```
+```{r}
+pnull1<-adjust_quantile(nullprop$alpha00,nullprop$alpha01,nullprop$alpha10,nullprop$alpha1,nullprop$alpha2,input_pvalues,exact=1)
+```
+
+The Q-Q plot based on the approximation method is shown as follows:
+```{r,fig.height=5,fig.width=5}
+pmax <- apply(input_pvalues,1,max)
+correct_qqplot(pmax, pnull)
+```
+
+
+The Q-Q plot based on the exact method is shown as follows:
+```{r,fig.height=5,fig.width=5}
+correct_qqplot(pmax, pnull1)
+```
+
+##### session information
+```{r sessionInfo, include=TRUE, echo=TRUE, results='markup'}
+sessionInfo()
+```

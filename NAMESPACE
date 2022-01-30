@@ -1,0 +1,5 @@
+import("fdrtool")
+import("qvalue")
+importFrom("graphics", "abline", "legend", "plot", "points")
+importFrom("stats", "lm", "ks.test", "quantile", "complete.cases")
+export("null_estimation","fwer_est","adjust_quantile","correct_qqplot","fdr_est")
